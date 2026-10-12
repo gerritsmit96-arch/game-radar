@@ -1,0 +1,35 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Radar rings -->
+    <path
+        android:pathData="M54,54m-26,0a26,26 0,1 1,52 0a26,26 0,1 1,-52 0"
+        android:strokeWidth="2.5"
+        android:strokeColor="#5CC8FF"
+        android:strokeAlpha="0.45"
+        android:fillColor="#00000000" />
+    <path
+        android:pathData="M54,54m-16,0a16,16 0,1 1,32 0a16,16 0,1 1,-32 0"
+        android:strokeWidth="2.5"
+        android:strokeColor="#5CC8FF"
+        android:strokeAlpha="0.7"
+        android:fillColor="#00000000" />
+    <!-- Sweep -->
+    <path
+        android:pathData="M54,54 L54,28 A26,26 0 0,1 76.5,41 Z"
+        android:fillColor="#5CC8FF"
+        android:fillAlpha="0.35" />
+    <!-- Centre dot and blips -->
+    <path
+        android:pathData="M54,54m-4,0a4,4 0,1 1,8 0a4,4 0,1 1,-8 0"
+        android:fillColor="#5CC8FF" />
+    <path
+        android:pathData="M66,38m-3,0a3,3 0,1 1,6 0a3,3 0,1 1,-6 0"
+        android:fillColor="#FFFFFF" />
+    <path
+        android:pathData="M40,64m-2.5,0a2.5,2.5 0,1 1,5 0a2.5,2.5 0,1 1,-5 0"
+        android:fillColor="#FFFFFF"
+        android:fillAlpha="0.8" />
+</vector>
