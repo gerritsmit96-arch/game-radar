@@ -18,7 +18,7 @@ class GameAdapter(private val onClick: (Game) -> Unit) :
     }
 
     private val games = ArrayList<Game>()
-    private val seen = HashSet<Int>()
+    private val seen = HashSet<String>()
     private var rows: List<Row> = emptyList()
     private var grouped = true
     private var footer = false
@@ -47,7 +47,7 @@ class GameAdapter(private val onClick: (Game) -> Unit) :
     }
 
     private fun addInternal(list: List<Game>) {
-        for (g in list) if (seen.add(g.id)) games.add(g)
+        for (g in list) if (seen.add(g.key)) games.add(g)
     }
 
     @Suppress("NotifyDataSetChanged")
@@ -113,7 +113,7 @@ class GameAdapter(private val onClick: (Game) -> Unit) :
             badges.showPlatformBadges(g.platformIds)
             genres.text = g.genres.joinToString(" · ")
             genres.visibility = if (g.genres.isEmpty()) View.GONE else View.VISIBLE
-            ImageLoader.load(RawgApi.thumb(g.image, 300, 200), cover)
+            ImageLoader.load(IgdbApi.coverUrl(g.coverId), cover)
             itemView.setOnClickListener { onClick(g) }
         }
     }

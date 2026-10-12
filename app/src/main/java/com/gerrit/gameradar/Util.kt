@@ -27,13 +27,26 @@ import kotlin.math.roundToInt
 
 object Prefs {
     private const val FILE = "gameradar"
-    private const val KEY = "rawg_key"
 
-    fun key(ctx: Context): String =
-        ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).getString(KEY, "") ?: ""
+    private fun sp(ctx: Context) = ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE)
 
-    fun setKey(ctx: Context, value: String) {
-        ctx.getSharedPreferences(FILE, Context.MODE_PRIVATE).edit().putString(KEY, value).apply()
+    fun clientId(ctx: Context): String = sp(ctx).getString("client_id", "") ?: ""
+    fun clientSecret(ctx: Context): String = sp(ctx).getString("client_secret", "") ?: ""
+    fun hasKeys(ctx: Context): Boolean = clientId(ctx).isNotBlank() && clientSecret(ctx).isNotBlank()
+
+    fun setKeys(ctx: Context, id: String, secret: String) {
+        sp(ctx).edit()
+            .putString("client_id", id)
+            .putString("client_secret", secret)
+            .putString("token", "")
+            .putLong("token_expiry", 0)
+            .apply()
+    }
+
+    fun token(ctx: Context): String = sp(ctx).getString("token", "") ?: ""
+    fun tokenExpiry(ctx: Context): Long = sp(ctx).getLong("token_expiry", 0)
+    fun setToken(ctx: Context, token: String, expiry: Long) {
+        sp(ctx).edit().putString("token", token).putLong("token_expiry", expiry).apply()
     }
 }
 
@@ -41,19 +54,12 @@ object Fmt {
     private val dayFmt = DateTimeFormatter.ofPattern("EEE, d MMM yyyy", Locale.getDefault())
     private val monthFmt = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault())
 
-    fun parse(s: String?): LocalDate? =
-        try { if (s == null) null else LocalDate.parse(s) } catch (e: Exception) { null }
-
     fun monthHeader(g: Game): String =
-        parse(g.released)?.format(monthFmt) ?: "Date unknown"
+        if (g.exactDay) g.date.format(monthFmt) else "${g.human} (no exact date yet)"
 
-    fun dateLine(g: Game): String {
-        val d = parse(g.released) ?: return "TBA"
-        val base = d.format(dayFmt)
-        val rel = relative(d)
-        val est = if (g.tba) " (estimated)" else ""
-        return "$base$est · $rel"
-    }
+    fun dateLine(g: Game): String =
+        if (g.exactDay) "${g.date.format(dayFmt)} · ${relative(g.date)}"
+        else "${g.human} · exact day not announced"
 
     fun relative(d: LocalDate): String {
         val days = ChronoUnit.DAYS.between(LocalDate.now(), d)
@@ -83,7 +89,7 @@ fun Context.openUrl(url: String) {
 fun LinearLayout.showPlatformBadges(platformIds: List<Int>) {
     removeAllViews()
     for (id in platformIds) {
-        val p = RawgApi.platform(id) ?: continue
+        val p = IgdbApi.platform(id) ?: continue
         val tv = TextView(context).apply {
             text = p.label
             setTextColor(Color.WHITE)

@@ -133,7 +133,7 @@
         android:layout_height="wrap_content"
         android:gravity="center"
         android:padding="6dp"
-        android:text="Game data provided by RAWG.io"
+        android:text="Release data provided by IGDB.com"
         android:textColor="?android:attr/textColorSecondary"
         android:textSize="11sp" />
 </LinearLayout>

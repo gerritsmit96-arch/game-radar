@@ -4,9 +4,10 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.text.InputType
 import android.view.View
 import android.widget.EditText
-import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
@@ -39,16 +40,20 @@ class MainActivity : AppCompatActivity() {
     private var hideObscure = true
 
     // Paging state
-    private var page = 1
+    private var offset = 0
     private var hasNext = true
     private var loading = false
     private var generation = 0
+
+    // Entries merged by game + date; (game, platform) pairs already placed
+    private val entries = LinkedHashMap<String, Game>()
+    private val placed = HashSet<String>()
 
     private class Query(
         val from: LocalDate,
         val to: LocalDate,
         val platforms: String,
-        val ordering: String,
+        val ascending: Boolean,
         val popular: Boolean,
         val hideObscure: Boolean
     )
@@ -114,9 +119,9 @@ class MainActivity : AppCompatActivity() {
             reload()
         }
 
-        findViewById<TextView>(R.id.attribution).setOnClickListener { openUrl("https://rawg.io") }
+        findViewById<TextView>(R.id.attribution).setOnClickListener { openUrl("https://www.igdb.com") }
 
-        if (Prefs.key(this).isBlank()) {
+        if (!Prefs.hasKeys(this)) {
             showMissingKey()
             showKeyDialog()
         } else {
@@ -132,45 +137,32 @@ class MainActivity : AppCompatActivity() {
     private fun currentQuery(): Query {
         val today = LocalDate.now()
         return if (tab == 0) {
-            Query(
-                from = today.plusDays(1),
-                to = today.plusYears(5),
-                platforms = platform.param,
-                ordering = if (popularFirst) "-added" else "released",
-                popular = popularFirst,
-                hideObscure = hideObscure
-            )
+            Query(today.plusDays(1), today.plusYears(5), platform.param, true, popularFirst, hideObscure)
         } else {
-            Query(
-                from = today.minusDays(60),
-                to = today,
-                platforms = platform.param,
-                ordering = if (popularFirst) "-added" else "-released",
-                popular = popularFirst,
-                hideObscure = hideObscure
-            )
+            Query(today.minusDays(60), today, platform.param, false, popularFirst, hideObscure)
         }
     }
 
     private fun reload() {
         generation++
         loading = false
-        page = 1
+        offset = 0
         hasNext = true
+        entries.clear()
+        placed.clear()
         adapter.setGames(emptyList(), groupByMonth = !popularFirst)
         status.visibility = View.GONE
         loadMore()
     }
 
     private fun maybeLoadMore() {
-        if (!hasNext || loading) return
+        if (!hasNext || loading || popularFirst) return
         val last = layoutManager.findLastVisibleItemPosition()
         if (last >= adapter.itemCount - 8) loadMore()
     }
 
     private fun loadMore() {
-        val key = Prefs.key(this)
-        if (key.isBlank()) {
+        if (!Prefs.hasKeys(this)) {
             swipe.isRefreshing = false
             showMissingKey()
             return
@@ -179,43 +171,41 @@ class MainActivity : AppCompatActivity() {
         loading = true
 
         val gen = generation
-        val startPage = page
+        val startOffset = offset
         val q = currentQuery()
         if (adapter.gameCount == 0) swipe.isRefreshing = true else adapter.setFooterLoading(true)
 
         executor.execute {
-            val found = ArrayList<Game>()
-            var p = startPage
+            val rows = ArrayList<ReleaseRow>()
+            var off = startOffset
             var next = true
             var error: String? = null
-            var tries = 0
             try {
-                // Keep fetching until we have a decent batch after filtering
-                while (next && found.size < 15 && tries < 6) {
-                    val r = RawgApi.games(key, q.from, q.to, q.platforms, q.ordering, p)
-                    for (g in r.games) {
-                        if (g.released == null) continue
-                        if (g.platformIds.isEmpty()) continue
-                        if (q.hideObscure && g.added < MIN_ADDED) continue
-                        found.add(g)
+                // "Popular first" needs the whole range to sort it; otherwise load until we have a useful batch.
+                val maxPages = if (q.popular) 12 else 4
+                var pages = 0
+                var useful = 0
+                while (next && pages < maxPages && (q.popular || useful < 20)) {
+                    val page = IgdbApi.releases(this, q.from, q.to, q.platforms, q.ascending, off)
+                    for (r in page.rows) {
+                        if (q.hideObscure && r.game.optInt("hypes") + r.game.optInt("total_rating_count") == 0) continue
+                        rows.add(r)
+                        useful++
                     }
-                    next = r.hasNext
-                    // Sorted by popularity: once we hit obscure titles, everything after is obscure too
-                    if (q.popular && q.hideObscure && r.games.isNotEmpty() && r.games.last().added < MIN_ADDED) {
-                        next = false
-                    }
-                    p++
-                    tries++
+                    // IGDB doesn't report totals: a full page means there may be more
+                    next = page.rawCount >= IgdbApi.PAGE_SIZE
+                    off += IgdbApi.PAGE_SIZE
+                    pages++
                 }
-            } catch (e: RawgApi.ApiException) {
+            } catch (e: IgdbApi.ApiException) {
                 error = e.message
             } catch (e: Exception) {
                 error = "Couldn't load games. Check your internet connection and pull down to retry."
             }
 
             val err = error
-            val nextPage = p
-            val more = next
+            val nextOffset = off
+            val more = if (q.popular) false else next
             main.post {
                 if (gen != generation || isDestroyed) return@post
                 loading = false
@@ -226,15 +216,36 @@ class MainActivity : AppCompatActivity() {
                     else Toast.makeText(this, err, Toast.LENGTH_LONG).show()
                     return@post
                 }
-                page = nextPage
+                offset = nextOffset
                 hasNext = more
-                adapter.addGames(found)
+                merge(rows)
+                val list = if (q.popular) entries.values.sortedByDescending { it.score } else entries.values.toList()
+                adapter.setGames(list, groupByMonth = !q.popular)
                 if (adapter.gameCount == 0 && !hasNext) {
                     showStatus("No games found for this filter.")
                 } else {
                     status.visibility = View.GONE
                 }
                 recycler.post { maybeLoadMore() }
+            }
+        }
+    }
+
+    /**
+     * Folds raw release rows into list entries: one entry per game per date, listing every
+     * platform launching that day. Regional duplicates of the same game+platform are skipped.
+     */
+    private fun merge(rows: List<ReleaseRow>) {
+        for (r in rows) {
+            if (r.gameId == 0) continue
+            if (!placed.add("${r.gameId}-${r.platform}")) continue
+            val key = "${r.gameId}-${r.date}"
+            val existing = entries[key]
+            if (existing == null) {
+                entries[key] = IgdbApi.toGame(r)
+            } else if (r.platform !in existing.platformIds) {
+                existing.platformIds.add(r.platform)
+                existing.platformIds.sortBy { IgdbApi.PLATFORM_ORDER.indexOf(it) }
             }
         }
     }
@@ -246,39 +257,45 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun showMissingKey() {
-        status.text = "Game Radar needs a free RAWG API key to load games.\n\nTap here to add it."
+        status.text = "Game Radar needs free IGDB keys (a Twitch Client ID and Secret) to load games.\n\nTap here to add them."
         status.setOnClickListener { showKeyDialog() }
         status.visibility = View.VISIBLE
     }
 
     private fun showKeyDialog() {
-        val input = EditText(this).apply {
-            hint = "Paste your RAWG API key"
-            setText(Prefs.key(this@MainActivity))
+        val idInput = EditText(this).apply {
+            hint = "Client ID"
+            setText(Prefs.clientId(this@MainActivity))
             isSingleLine = true
         }
-        val box = FrameLayout(this).apply {
+        val secretInput = EditText(this).apply {
+            hint = "Client Secret"
+            setText(Prefs.clientSecret(this@MainActivity))
+            isSingleLine = true
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+        }
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
             setPadding(dp(24), dp(8), dp(24), 0)
-            addView(input)
+            addView(idInput)
+            addView(secretInput)
         }
         MaterialAlertDialogBuilder(this)
-            .setTitle("RAWG API key")
+            .setTitle("IGDB keys")
             .setMessage(
-                "Game Radar gets its release data from RAWG.io. Get a free key at rawg.io/apidocs " +
-                    "(sign up, then copy the key), and paste it here."
+                "Release dates come from IGDB (run by Twitch), which tracks each platform's date separately.\n\n" +
+                    "1. Tap \"Open Twitch\" and log in (2-factor login must be on).\n" +
+                    "2. Register Your Application: any name, OAuth Redirect URL http://localhost, " +
+                    "category Application Integration, client type Confidential.\n" +
+                    "3. Tap Manage, copy the Client ID, press New Secret and copy that too."
             )
             .setView(box)
             .setPositiveButton("Save") { _, _ ->
-                Prefs.setKey(this, input.text.toString().trim())
+                Prefs.setKeys(this, idInput.text.toString().trim(), secretInput.text.toString().trim())
                 reload()
             }
-            .setNeutralButton("Get a key") { _, _ -> openUrl("https://rawg.io/apidocs") }
+            .setNeutralButton("Open Twitch") { _, _ -> openUrl("https://dev.twitch.tv/console/apps") }
             .setNegativeButton("Cancel", null)
             .show()
-    }
-
-    companion object {
-        /** Minimum number of RAWG users tracking a game for it to count as "not obscure". */
-        private const val MIN_ADDED = 3
     }
 }

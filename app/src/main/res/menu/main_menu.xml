@@ -10,6 +10,6 @@
 
     <item
         android:id="@+id/action_key"
-        android:title="API key"
+        android:title="IGDB keys"
         app:showAsAction="never" />
 </menu>

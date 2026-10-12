@@ -7,18 +7,23 @@ Android app listing PC, PS5 and Xbox games:
 
 Each game shows its release date, platform badges and genres. Tap a game for store links
 (Steam, PlayStation Store, Xbox Store, Epic, GOG), the official website, YouTube trailers,
-the RAWG page and a description.
+the IGDB page and a description.
 
 Filters: All / PC / PS5 / Xbox, "Most popular first", and "Hide obscure titles"
 (hides tiny listings almost nobody tracks; switch it off to see everything).
 
-## 1. Get a free RAWG API key
+## 1. Get free IGDB keys
 
-The release data comes from [RAWG.io](https://rawg.io), the largest open game database.
+Release dates come from [IGDB](https://www.igdb.com) (run by Twitch). Unlike most game
+databases it stores a separate date for every platform, so console ports of older PC games
+(e.g. BeamNG.drive on PS5) show up on their own launch date.
 
-1. Go to https://rawg.io/apidocs and sign up (free, ~1 minute).
-2. Copy your API key. The app asks for it the first time it opens
-   (you can change it later via ⋮ → API key).
+1. Go to https://dev.twitch.tv/console/apps and log in with a Twitch account
+   (two-factor login must be switched on).
+2. **Register Your Application**: any name, OAuth Redirect URL `http://localhost`,
+   category *Application Integration*, client type *Confidential*.
+3. Open **Manage**, copy the **Client ID**, press **New Secret** and copy that too.
+4. Paste both into the app the first time it opens (later: ⋮ → IGDB keys).
 
 ## 2. Build the APK — option A: GitHub (no software needed)
 
@@ -42,7 +47,7 @@ The release data comes from [RAWG.io](https://rawg.io), the largest open game da
 
 ## Notes
 
-- Release dates are only as good as RAWG's data; "(estimated)" means the publisher
-  hasn't confirmed the exact day yet. Games with no date at all ("TBA") can't be listed
-  by date, so they don't appear.
-- RAWG's free tier allows 20,000 requests a month — far more than personal use needs.
+- A game that launches on different days per platform appears once per date
+  (e.g. Over the Hill: PC in October, consoles later).
+- Dates like "Q4 2026" or "2027" are shown as "exact day not announced".
+- "Hide obscure titles" hides listings nobody on IGDB follows or has rated yet.
