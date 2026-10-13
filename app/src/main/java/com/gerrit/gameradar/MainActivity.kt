@@ -284,7 +284,7 @@ class MainActivity : AppCompatActivity() {
             .setTitle("IGDB keys")
             .setMessage(
                 "Release dates come from IGDB (run by Twitch), which tracks each platform's date separately.\n\n" +
-                    "1. Tap \"Open Twitch\" and log in (2-factor login must be on).\n" +
+                    "1. Tap \"Open Twitch\" (opens in your browser) and log in. 2-factor login must be on.\n" +
                     "2. Register Your Application: any name, OAuth Redirect URL http://localhost, " +
                     "category Application Integration, client type Confidential.\n" +
                     "3. Tap Manage, copy the Client ID, press New Secret and copy that too."
@@ -294,7 +294,7 @@ class MainActivity : AppCompatActivity() {
                 Prefs.setKeys(this, idInput.text.toString().trim(), secretInput.text.toString().trim())
                 reload()
             }
-            .setNeutralButton("Open Twitch") { _, _ -> openUrl("https://dev.twitch.tv/console/apps") }
+            .setNeutralButton("Open Twitch") { _, _ -> openInBrowser("https://dev.twitch.tv/console/apps") }
             .setNegativeButton("Cancel", null)
             .show()
     }

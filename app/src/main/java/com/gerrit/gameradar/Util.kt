@@ -77,6 +77,26 @@ object Fmt {
 
 fun Context.dp(v: Int): Int = (v * resources.displayMetrics.density).roundToInt()
 
+/** Opens a link in a web browser, never in an app that claims the link (e.g. the Twitch app). */
+fun Context.openInBrowser(url: String) {
+    val uri = Uri.parse(url)
+    val browsers = listOf("com.android.chrome", "com.sec.android.app.sbrowser", "org.mozilla.firefox",
+        "com.microsoft.emmx", "com.opera.browser", "com.brave.browser")
+    for (pkg in browsers) {
+        try {
+            startActivity(Intent(Intent.ACTION_VIEW, uri).setPackage(pkg))
+            return
+        } catch (e: ActivityNotFoundException) { }
+    }
+    try {
+        val i = Intent(Intent.ACTION_VIEW, uri)
+        i.selector = Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_BROWSER)
+        startActivity(i)
+        return
+    } catch (e: Exception) { }
+    openUrl(url)
+}
+
 fun Context.openUrl(url: String) {
     try {
         startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
